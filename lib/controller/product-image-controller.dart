@@ -1,112 +1,154 @@
-// ignore_for_file: file_names, unused_field, unused_local_variable, prefer_const_constructors, avoid_print, no_leading_underscores_for_local_identifiers
+// import 'dart:io';
+
+// import 'package:firebase_storage/firebase_storage.dart';
+// import 'package:flutter/material.dart';
+// import 'package:get/get.dart';
+// import 'package:image_picker/image_picker.dart';
+// import 'package:permission_handler/permission_handler.dart';
+
+// class AddProductImagesController extends GetxController {
+//   final ImagePicker _picker = ImagePicker();
+//   RxList<XFile> selectedImages = <XFile>[].obs;
+//   final RxList<String> arrImagesUrl = <String>[].obs;
+//   final FirebaseStorage storageRef = FirebaseStorage.instance;
+
+//   Future<void> showImagesPickerDialog() async {
+//     print("showImagesPickerDialog");
+//     PermissionStatus status = await _requestPermission();
+
+//     if (status == PermissionStatus.granted) {
+//       await _showDialog();
+//     } else {
+//       print("Error: Please allow permission for further usage");
+//       openAppSettings();
+//     }
+//   }
+
+//   Future<PermissionStatus> _requestPermission() async {
+//     if (await Permission.mediaLibrary.request().isGranted) {
+//       return PermissionStatus.granted;
+//     } else {
+//       return PermissionStatus.denied;
+//     }
+//   }
+
+//   Future<void> _showDialog() async {
+//     await Get.defaultDialog(
+//       title: "Choose Image",
+//       middleText: "Pick an image from the camera or gallery?",
+//       actions: [
+//         ElevatedButton(
+//           onPressed: () async {
+//             Get.back();
+//             await selectImages("camera");
+//           },
+//           child: Text('Camera'),
+//         ),
+//         ElevatedButton(
+//           onPressed: () async {
+//             Get.back();
+//             await selectImages("gallery");
+//           },
+//           child: Text('Gallery'),
+//         ),
+//       ],
+//     );
+//   }
+
+//   Future<void> selectImages(String type) async {
+//     List<XFile> imgs = [];
+//     try {
+//       if (type == 'gallery') {
+//         imgs = await _picker.pickMultiImage(imageQuality: 80);
+//       } else {
+//         final img =
+//             await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+//         if (img != null) {
+//           imgs.add(img);
+//         }
+//       }
+
+//       if (imgs.isNotEmpty) {
+//         selectedImages.addAll(imgs);
+//         uploadImages(selectedImages);
+//       }
+//     } catch (e) {
+//       print('Error: $e');
+//     }
+//   }
+
+//   void uploadImages(RxList<XFile> images) async {
+//     arrImagesUrl.clear();
+//     for (int i = 0; i < images.length; i++) {
+//       dynamic imageUrl = await uploadFile(images[i]);
+//       arrImagesUrl.add(imageUrl.toString());
+//     }
+//   }
+
+//   Future<String> uploadFile(XFile image) async {
+//     TaskSnapshot reference = await storageRef
+//         .ref()
+//         .child("product-images")
+//         .child(image.name + DateTime.now().toString())
+//         .putFile(File(image.path));
+
+//     return await reference.ref.getDownloadURL();
+//   }
+
+//   void removeImage(int index) {
+//     selectedImages.removeAt(index);
+//   }
+// }
 
 import 'dart:io';
-import 'package:device_info/device_info.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
+
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 
-class AddProductImagesController extends GetxController {
-  final ImagePicker _picker = ImagePicker();
-  RxList<XFile> selectedIamges = <XFile>[].obs;
-  final RxList<String> arrImagesUrl = <String>[].obs;
-  final FirebaseStorage storageRef = FirebaseStorage.instance;
+class ImagePickerController extends GetxController {
+  final _picker = ImagePicker();
+  final RxList<File> _selectedImages = <File>[].obs;
+  final RxList<String> _uploadUrls = <String>[].obs;
 
-  Future<void> showImagesPickerDialog() async {
-    PermissionStatus status;
-    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    AndroidDeviceInfo androidDeviceInfo = await deviceInfo.androidInfo;
+  List<File> get selectedImages => _selectedImages;
+  List<String> get uploadUrls => _uploadUrls;
 
-    if (androidDeviceInfo.version.sdkInt <= 32) {
-      status = await Permission.storage.request();
+  Future<void> getImageFromGallery() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      _selectedImages.add(File(pickedFile.path));
     } else {
-      status = await Permission.mediaLibrary.request();
-    }
-
-    //
-    if (status == PermissionStatus.granted) {
-      Get.defaultDialog(
-        title: "Choose Image",
-        middleText: "Pick an image from the camera or gallery?",
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Get.back();
-              seletcImages("camera");
-            },
-            child: Text('Camera'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Get.back();
-              seletcImages("gallery");
-            },
-            child: Text('Gallery'),
-          ),
-        ],
-      );
-    }
-    if (status == PermissionStatus.denied) {
-      print("Error please allow permission for further usage");
-      openAppSettings();
-    }
-    if (status == PermissionStatus.permanentlyDenied) {
-      print("Error please allow permission for further usage");
-      openAppSettings();
+      print('No image selected.');
     }
   }
 
-  Future<void> seletcImages(String type) async {
-    List<XFile> imgs = [];
-    if (type == 'gallery') {
-      try {
-        imgs = await _picker.pickMultiImage(imageQuality: 80);
-        update();
-      } catch (e) {
-        print('Error $e');
+  Future<void> uploadImages() async {
+    try {
+      for (var imageFile in _selectedImages) {
+        final ref = firebase_storage.FirebaseStorage.instance
+            .ref()
+            .child('images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+        final uploadTask = ref.putFile(imageFile);
+        await uploadTask.whenComplete(() async {
+          final downloadUrl = await ref.getDownloadURL();
+          _uploadUrls.add(downloadUrl);
+        });
       }
-    } else {
-      final img =
-          await _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-
-      if (img != null) {
-        imgs.add(img);
-        update();
-      }
-    }
-
-    if (imgs.isNotEmpty) {
-      selectedIamges.addAll(imgs);
-      update();
-      print(selectedIamges.length);
+    } catch (e) {
+      print('Error uploading images: $e');
     }
   }
 
-  void removeImages(int index) {
-    selectedIamges.removeAt(index);
-    update();
+  void removeImage(int index) {
+    _selectedImages.removeAt(index);
   }
 
-  //
-  Future<void> uploadFunction(List<XFile> _images) async {
-    arrImagesUrl.clear();
-    for (int i = 0; i < _images.length; i++) {
-      dynamic imageUrl = await uplaodFile(_images[i]);
-      arrImagesUrl.add(imageUrl.toString());
-    }
-    update();
-  }
-
-  //
-  Future<String> uplaodFile(XFile _image) async {
-    TaskSnapshot reference = await storageRef
-        .ref()
-        .child("product-images")
-        .child(_image.name + DateTime.now().toString())
-        .putFile(File(_image.path));
-
-    return await reference.ref.getDownloadURL();
+  @override
+  void onClose() {
+    _selectedImages.clear();
+    _uploadUrls.clear();
+    super.onClose();
   }
 }
+

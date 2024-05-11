@@ -2,10 +2,13 @@
 
 import 'dart:io';
 import 'package:admin_panel/controller/product-image-controller.dart';
+import 'package:admin_panel/screens/add-image.dart';
+import 'package:admin_panel/widgets/drawer-widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../controller/category-dropdown-controller.dart';
 import '../controller/is-sale-controller.dart';
@@ -13,27 +16,36 @@ import '../model/product-model.dart';
 import '../services/generate-ids.dart';
 import '../widgets/drop-down-categories-widgets.dart';
 
-class AddProductScreen extends StatelessWidget {
+class AddProductScreen extends StatefulWidget {
   AddProductScreen({super.key});
 
-  AddProductImagesController addProductImagesController =
-      Get.put(AddProductImagesController());
+  @override
+  State<AddProductScreen> createState() => _AddProductScreenState();
+}
 
-  
+class _AddProductScreenState extends State<AddProductScreen> {
+  final ImagePickerController addProductImagesController =
+      Get.put(ImagePickerController());
+
   CategoryDropDownController categoryDropDownController =
       Get.put(CategoryDropDownController());
 
   IsSaleController isSaleController = Get.put(IsSaleController());
 
   TextEditingController productNameController = TextEditingController();
+
   TextEditingController salePriceController = TextEditingController();
+
   TextEditingController fullPriceController = TextEditingController();
+
   TextEditingController deliveryTimeController = TextEditingController();
+
   TextEditingController productDescriptionController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: DrawerWidget(),
       appBar: AppBar(
         title: const Text("Add Products"),
         backgroundColor: Colors.blue,
@@ -51,7 +63,7 @@ class AddProductScreen extends StatelessWidget {
                     Text("Select Images"),
                     ElevatedButton(
                       onPressed: () {
-                        addProductImagesController.showImagesPickerDialog();
+                        addProductImagesController.getImageFromGallery();
                       },
                       child: Text("Select Images"),
                     )
@@ -60,28 +72,25 @@ class AddProductScreen extends StatelessWidget {
               ),
 
               //show Images
-              GetBuilder<AddProductImagesController>(
-                init: AddProductImagesController(),
+              GetBuilder<ImagePickerController>(
+                init: ImagePickerController(),
                 builder: (imageController) {
-                  return imageController.selectedIamges.length > 0
+                  return imageController.selectedImages.length > 0
                       ? Container(
                           width: MediaQuery.of(context).size.width - 20,
                           height: Get.height / 3.0,
                           child: GridView.builder(
-                            itemCount: imageController.selectedIamges.length,
+                            itemCount: imageController.selectedImages.length,
                             physics: const BouncingScrollPhysics(),
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 20,
-                              crossAxisSpacing: 10,
-                            ),
+                                    crossAxisCount: 1),
                             itemBuilder: (BuildContext context, int index) {
                               return Stack(
                                 children: [
                                   Image.file(
                                     File(addProductImagesController
-                                        .selectedIamges[index].path),
+                                        .selectedImages[index].path),
                                     fit: BoxFit.cover,
                                     height: Get.height / 4,
                                     width: Get.width / 2,
@@ -91,9 +100,9 @@ class AddProductScreen extends StatelessWidget {
                                     top: 0,
                                     child: InkWell(
                                       onTap: () {
-                                        imageController.removeImages(index);
+                                        imageController.removeImage(index);
                                         print(imageController
-                                            .selectedIamges.length);
+                                            .selectedImages.length);
                                       },
                                       child: CircleAvatar(
                                         child: Icon(
@@ -259,9 +268,8 @@ class AddProductScreen extends StatelessWidget {
 
                   try {
                     EasyLoading.show();
-                    await addProductImagesController.uploadFunction(
-                        addProductImagesController.selectedIamges);
-                    print(addProductImagesController.arrImagesUrl);
+                    await addProductImagesController.uploadImages();
+                    // print(addProductImagesController.uploadImages(.));
 
                     String productId = await GenerateIds().generateProductId();
 
@@ -273,9 +281,9 @@ class AddProductScreen extends StatelessWidget {
                       categoryName: categoryDropDownController
                           .selectedCategoryName
                           .toString(),
-                          salePrice: double.parse(salePriceController.text),
-                          fullPrice: double.parse(fullPriceController.text),
-                      productImages: addProductImagesController.arrImagesUrl,
+                      salePrice: salePriceController.text.trim(),
+                      fullPrice: fullPriceController.text.trim(),
+                      productImages: addProductImagesController.uploadUrls,
                       deliveryTime: deliveryTimeController.text.trim(),
                       isSale: isSaleController.isSale.value,
                       productDescription:
